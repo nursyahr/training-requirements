@@ -1,0 +1,275 @@
+---
+title: "Gapminder Analysis"
+author: "Syahirah"
+date: "6/17/2021"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(ggpubr)
+library(plotly)
+library(RColorBrewer)
+library(directlabels)
+library(knitr)
+library(shiny)
+
+```
+
+# Part 1: CO2 Emissions and GDP 
+Growth Domestic Product (GDP) is defined by the International Monetary Fund (IMF) as "the monetary value of final goods and services—that is, those that are bought by the final user—produced in a country in a given period of time". It is often used as a measure of economic growth of a country. Meanwhile, CO2 is a known pollutant and active contributor to environmental pollution. CO2 emissions is used as an indicator of enviornmental degradation.
+
+## CO2 Emissions and GDP in 1962
+
+Here, we explore the relationship between **economic growth** (GDP per capita) and **environmental pollution** (CO2 emissions) in the year **1962**.
+
+
+```{r qn-1, include = FALSE}
+# Read File
+df <- read_csv("gapminder_clean.csv")
+cnames <- colnames(df)
+colnames(df) <- c("num", "country", "year", "agri", "co2_em", "dom_credit", "electric_pwr", "energy_use", "expt_gns", "fert_rate", "gdp_growth", "impt_gns", "industry_val", "inflation", "life_exp", "pop_density", "services", "pop", "continent", "gdpPercap")
+
+# Filter for year 1962
+by1962_c02_gdp <- df %>%
+  filter(year==1962) 
+
+# Histogram to visualize distribution
+ggplot(by1962_c02_gdp, aes(x=co2_em)) + geom_histogram() 
+ggplot(by1962_c02_gdp, aes(x=gdpPercap)) + geom_histogram()
+
+# Both are right-skewed so log transform then plot histogram again
+p <- by1962_c02_gdp %>% 
+  mutate(log_co2 = log(co2_em, 10), log_gdp = log(gdpPercap, 10)) %>%
+    ggplot()
+
+p + geom_histogram(aes(x= log_co2)) 
+p + geom_histogram(aes(x= log_gdp))
+
+# Summary of statistics: measure center and spread (outliers are present but not removed; so use median n IQR to measure)
+medGDP_1962 <- round(median(by1962_c02_gdp$gdpPercap, na.rm = TRUE),3)
+iqrGDP_1962 <- IQR(by1962_c02_gdp$gdpPercap, na.rm = TRUE)
+
+medCO2_1962 <- round(median(by1962_c02_gdp$co2_em, na.rm = TRUE),3)
+iqrCO2_1962 <- IQR(by1962_c02_gdp$co2_em, na.rm = TRUE)
+
+CO2_GDP_pval <- round(cor.test(by1962_c02_gdp$co2_em, by1962_c02_gdp$gdpPercap)$p.value,3)
+CO2_GDP_pearson <- round(cor.test(by1962_c02_gdp$co2_em, by1962_c02_gdp$gdpPercap)$estimate,3)
+
+
+```
+``` {r fig1, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align = 'center', fig.cap = "Fig.1: Relationship between CO2 Emissions and GDP per capita in 1962"}
+# Plot a scatter plot 
+by1962_c02_gdp%>%
+  ggplot() + 
+  geom_point(shape = 21, mapping = aes(x = gdpPercap, y = co2_em), color = "black", fill = "#ffb99b", stroke = 1) + 
+  labs(x="GDP per capita", y="CO2 emissions (metric tons per capita)") +
+  geom_smooth(method="lm",mapping = aes(x = gdpPercap, y = co2_em), color = "#f67e7d") + scale_x_log10() + scale_y_log10() + expand_limits(y=0)
+
+```
+
+
+In 1962, the average GDP was `r medGDP_1962` while the average emission of CO2 (metric tons per capita) was `r medCO2_1962`. From Figure 1, we can observe a positive linear relationship between GDP per capita and CO2 emission. The strength of this correlation is measured using the Pearson test. The resulting Pearson R-value is `r CO2_GDP_pearson` indicating that there is a large positive relationship between these 2 variables, with a p-value of `r CO2_GDP_pval` < 0.05 thus we reject the null hypothesis that there is no significant association between GDP and CO2 emissions.
+
+Summarily, the **greater the economic growth** of a country, the **greater is its contribution to environment degradation**.
+
+
+## Year of strongest correlation between GDP and CO2 emissions
+
+Next, we observed the relationship between the 2 variables from 1962-2007. From Figure 2, we can see that there is mostly a strong positive correlation  between CO2 emissions and GDP per capita throughout the years. To determine the country with the strongest correlation, we used the Pearson's test to determine the R-value of each year. 
+
+```{r qn4, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = "Fig.2: Relationship between carbon dioxide emissions and GDP per capita" }
+df %>%
+  group_by(year) %>% 
+  ggplot(aes(x=co2_em, y=gdpPercap)) + 
+  geom_point() +
+  facet_wrap(facets = vars(year)) +
+  labs(x="CO2 emissions (metric tons per capita)", y=" GDP per capita") +
+  scale_x_log10() + scale_y_log10() + geom_smooth(method="lm") 
+```
+
+
+As seen in the table below, the correlation is the strongest in **1967** with a R-value of `{r by_year_corr[2][1]}` and a p-value of `{r by_year_corr[3][1]}` < 0.05 thus we reject the null hypothesis that there is no significant association between GDP and CO2 emission. 
+
+```{r tab1, echo = FALSE, results = 'last', message = FALSE, warning = FALSE,fig.align= 'center'}
+corr_fn_r2 <- function(x,y) {
+  res <- cor.test(x,y)
+  signif(res$estimate,3)
+}
+
+corr_fn_pval <- function(x,y) {
+  res <- cor.test(x,y)
+  format(signif(res$p.value, 3),3)
+}
+
+by_year_corr <- df %>%
+  group_by(year) %>%
+  summarize(corr_r2 = corr_fn_r2(co2_em, gdpPercap), corr_pval = corr_fn_pval(co2_em, gdpPercap)) %>%
+  arrange(desc(corr_r2))
+
+kable(by_year_corr, col.names = c("Year", "Pearson R-value", "p-value"), align = "cc", caption = "Table 1: Pearson R-values of CO2 Emission and GDP per capita across 1962-2007")
+```
+
+
+## CO2 Emissions and GDP per capita by continents in 1967
+This is an interactive scatter plot examining the relationship between CO2 emissions and GDP per capita in 1967. Some observations from this graph include:
+
+- No clear trend for **Asia**, probably since it consists of countries with varying levels of economic development. 
+- **Europe**, **Americas** and **Ocenia** are mostly located in the upper right quadrant indicating high economic growth and CO2 emission
+- **Africa** is mostly at the bottom left quadrant indicating low economic growth and low CO2 emission
+- Population does not seem to correlate to higher CO2 emissions as much as GDP per capita. The biggest populations (as indicated by size of the plot points) are located in the bottom left quadrant emitting lower levels of CO2.
+
+```{r qn5, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= "center", fig.cap = "Fig.3: Relationship between carbon dioxide emissions and GDP per capita"}
+
+by1967_c02_gdp <- df %>%
+  filter(year==1967, !is.na(continent))
+
+
+ggplotly(ggplot(by1967_c02_gdp, aes(x= co2_em, y= gdpPercap, alpha = 0.3, size = pop, color = continent)) + geom_point() + geom_jitter() + labs(x="Carbon dioxide emissions (metric tons per capita)", y=" GDP per capita") + scale_y_log10() + scale_x_log10()) %>% layout(legend = list(orientation = "h",x = 0.2, y = -0.2))
+
+
+```
+
+
+# Part 2
+## Energy Use by Continent between 1962-2007
+
+The table below illustrates the median energy used per continent between 1962-2007. Unsurprisingly, continents with more developed economies have the largest median energy use. Following which, the Kruskal Wallis H test was used to determine if there are stastically significant differences between the different continents in terms of median energy use. 
+
+```{r p2-qn1, echo = FALSE, fig.keep = 'none', message = FALSE, warning = FALSE}
+cont_energy <- df %>%
+  filter(!is.na(continent), !is.na(energy_use)) %>%
+  group_by(continent, year) 
+
+# Boxplot to observe distribution. Right-skew, so natural logarithmic transform.
+ggplot(cont_energy, aes(x=continent, y=energy_use)) + geom_boxplot() + labs(x="Continent", y="Energy use (kg of oil equivalent per capita)", title = "Distribution of energy use by continent")
+ggplot(cont_energy, aes(x=energy_use)) + geom_histogram() + facet_wrap(~continent)
+
+# Median energy use
+medENERGY_tab <- df %>%
+  filter(!is.na(continent)) %>%
+  group_by(continent) %>%
+  summarize(energy = round(median(energy_use, na.rm = TRUE),3))
+
+# Sumarize median energy to plot
+medENERGY_df <- df %>%
+  filter(!is.na(continent), !is.na(energy_use)) %>%
+  group_by(continent, year) %>%
+  summarize(medENERGY = round(median(energy_use, na.rm = TRUE),3))
+
+
+# Non-parametric test Kruskal Wallis H (in place of ANOVA)
+kruskal_test <- kruskal.test(medENERGY ~ continent, data = medENERGY_df)
+piiqni_pval <- signif(kruskal_test$p.value, 3)
+piiqni_chi <- signif(kruskal_test$statistic, 3)
+piiqni_df <- kruskal_test$parameter
+
+
+```
+
+```{r p2-qn1-figs, echo = FALSE, message = FALSE, warning = FALSE, fig.align = 'center', fig.cap = "Fig.4: Energy use by continent"}
+kable(medENERGY_tab, col.names = c("Continent", "Median Energy Use"), align = "cc", caption = "Table 2: Median Energy use (kg of oil equivalent per capita) by Continent between 1962-2007")
+
+ggplotly(ggplot(medENERGY_df, aes(x=year, y=medENERGY)) + geom_line(aes(color=continent)) + labs(x="Year", y= "Energy use (kg of oil equivalent per capita)") + expand_limits (y=0) +
+  scale_y_log10()) %>% layout(legend = list(orientation = "h",x = 0.2, y = -0.2))
+
+```
+With a H-value of `r piiqni_chi` and p-value of `r piiqni_pval` we reject the null hypothesis and conclude that the median of energy use are not all equal across continents.
+
+
+## Imports of Goods and Services after 1990
+
+Figure 5 below compares the imports of goods and services in Asia and Europe after 1990. Since the distributions are not normal, we used the Wilxocon Ranked Test to determine if the imports of goods and services is stastically significantly different between the 2 continents. 
+
+```{r p2-qn2, echo = FALSE, fig.keep = 'none', message = FALSE, warning = FALSE}
+# Visualize imports gns after 1990
+e_a_import <- df %>%
+  filter(!is.na(impt_gns)) %>%
+  filter(year > 1990, continent %in% c("Europe", "Asia")) 
+
+ggplot(e_a_import, aes(x= continent, y=impt_gns)) + geom_boxplot()
+ggplot(e_a_import, aes(x=impt_gns)) + geom_histogram() + facet_wrap(~continent)
+
+# Distribution is not normal. Measure center by median.
+
+eur_asia_import <- df %>%
+  filter(!is.na(impt_gns)) %>%
+  filter(year > 1990, continent %in% c("Europe", "Asia")) %>%
+  group_by(continent, year) %>%
+  summarise(medianImport = median(impt_gns)) 
+
+
+## Non-parametric test since the data is not normal, wilcox-rank sum test == no signficant difference
+eur_asia_wilcox <- signif(wilcox.test(eur_asia_import$medianImport ~ eur_asia_import$continent)$p.value, 3)
+```
+
+```{r p2-qn2-fig5, echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center", fig.cap = "Fig.5: Imports of Goods and Services in Asia and Europe after 1990"}
+ggplotly(ggplot(eur_asia_import, aes(x=year, y= medianImport)) + 
+  geom_line(aes(color=continent)) +
+  labs(x= "Year", y= "Imports of Goods and Services (% of GDP)") + expand_limits(y = 0)) %>% layout(legend = list(orientation = "h",x = 0.4, y = -0.2))
+```
+
+The resultant p-value of `r eur_asia_wilcox` > 0.05 means that we accept the null hypothesis that there is no significant difference between the median import of Europe and Asia, after 1990. 
+
+
+## Population Density
+
+Figure 6 below illustrates the top 15 countries with highest median population density (people per sq. km of land area) from 1962-2007. **Macao SAR, China** has the highest median population density, edging out Monaco by only a few hundreds.
+```{r p2-qn3, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align = "center", fig.cap = "Fig.6: Top 15 Countries with Highest Population Density (people per sq. km of land area)"}
+## 
+
+pop_dense <- df %>%
+  group_by(country) %>%
+  summarise(medianPop = median(pop_density)) %>%
+  arrange(desc(medianPop)) %>%
+  top_n(n=10)
+  
+# Make country an ordered factor
+pop_dense$country <- factor(pop_dense$country, levels = pop_dense$country)
+
+ggplotly(ggplot(pop_dense, aes(x=country, y=medianPop)) + 
+           geom_col(aes(fill = as.factor(country)), show.legend = FALSE) + 
+           theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+           labs(x= "Country", y= "Median Population Density") +
+           scale_fill_grey()) %>% layout(showlegend = FALSE)
+
+
+```
+
+
+## Life Expectancy at Birth
+
+Figure 7 below shows the top 10 countries with greatest increase in life expectancy at birth (years) between 1962 and 2007. From Figure 8, we can see that amongst these countries, **Maldives** had the greatest increase in life expectancy from 1962 to 2007 of ~37 years.
+
+```{r p2-qniv, echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center", fig.cap= c("Fig.7: Life Expectancy (at birth) from 1962-2007 ", "Fig.8: Top 10 countries with greatest increase in life expectancy from 1962 to 2007")}
+
+greatest_lifeExp <- df %>%
+  filter(year %in% c(1962, 2007)) %>%
+  group_by(country) %>% 
+  summarise(abs_chg =  life_exp[2] - life_exp[1]) %>%
+  arrange(desc(abs_chg)) %>%
+  top_n(10)
+
+top_10_countries_lifeExp <- df %>%
+  filter(country %in% greatest_lifeExp$country) %>%
+  group_by(country)
+
+ggplotly(ggplot(top_10_countries_lifeExp, aes(x=year, y=life_exp)) + 
+      geom_line(aes(color=country)) + geom_point(alpha = 0.2, aes(color = country)) +
+      labs(x= "Year", y= "Life Expectancy (Years)")) %>% layout(legend = list(orientation = "h",x = 0.2, y = -0.3))
+
+# Order the country acc to difference then plot
+greatest_lifeExp$country <- factor(greatest_lifeExp$country, levels = greatest_lifeExp$country)
+
+ggplotly(ggplot(greatest_lifeExp, aes(x= as.factor(country), y=abs_chg)) + geom_bar(stat = "identity", aes(fill = as.factor(country))) +
+  labs(y= "Difference in Life Expectancy (Years)", x= "Country") +
+  theme(axis.text.x = element_text(angle = 45, hjust =1)) +
+  scale_fill_grey()) %>% layout(showlegend = FALSE)
+```
