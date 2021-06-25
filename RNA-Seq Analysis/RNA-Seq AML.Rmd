@@ -29,15 +29,15 @@ library(pheatmap)
 # Introduction
 ## Acute Myeloid Leukemia
 
-Acute Myeloid Leukemia is characterized by an increase in the number of myeloid cells in the marrow and the premature terminal of the maturation of these myeloid cells. This results primarily in hematopoietic insufficiency.
+Acute Myeloid Leukemia is characterized by an increase in the number of myeloid cells in the marrow and the premature terminal of the maturation of these myeloid cells. This results primarily in hematopoietic insufficiency. DNA hypermethylation at gene promoters which leads to gene silencing is frequently observed.
 
-## Azacitidine
+Azacitidine is a DNA methyltransferase inhibitor (DNMTi) which has been used to treat AML patients. However, the inhibition is not permanent and DNA hypermethylation often resumes after treatment. Elucidating which genes are regulated by DNA methylation can inform further treatment strategies and provide a mechanistic understanding of the DNA demethylation in AML.
 
-Azacitidine is a DNA methyltransferase inhibitor (DNMTi) which has been used to treat AML patients. However, it is unclear what the relationship between hypomethylation and gene expression is. Elucidating which genes are regulated as a result of hypomethylation could be key in other future therapeutic strategies.
+## Study Design and Workflow Analysis
 
-## Study Design
+In this study, OCI-AML3 cells were treated with 5-azacytidine, with a paired control. The experiment was done in triplicates and then total RNA was sequenced.
 
-In this study, OCI-AML3 cells were treated with 5-azacytidine, with a paired control. The experiment was done in triplicates and then total RNA was sequenced.  
+The dataset was obtained from recount3 and differential gene expression analysis was done through the R package, DEseq2. Following which, gene set enrichment analysis (GSEA) was performed with the clusterProfiler package in R.
 
 ```{r download-load, include= FALSE}
 exp <- 'SRP038101'
@@ -59,7 +59,8 @@ rownames(rse_gene) <- gsub('\\.[0-9]*$', '', rownames(rse_gene))
 # Data Quality Check
 ## Principal Component Analysis
 
-In PCA, a clustering method is applied to essentially check if the treatment condition is the main variable responsible for variation in the data and to check if our replicates within each condition is similar. From the figure below we can see that the treatment condition accounts for 97% (PC1) of the variation and there is minimal variation between technical replicates (1%; PC2). 
+
+In PCA, a clustering method is applied to essentially check if the treatment condition is the main variable responsible for variation in the data and to check if our replicates within each condition is similar. From the figure below, when separated by their treatment condition on PC1, the samples notably clusters by treatment condition and tightly within their treatment groups. We can see that the treatment condition accounts for 97% (PC1) of the variation and there is minimal variation between technical replicates (1%; PC2) which is ideal. 
 
 ```{r dds-PCA, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = "Fig.1: PCA of samples"}
 # Create DEseq dataset: design formula variable of interest is treatment status
@@ -74,7 +75,7 @@ rld <- rlog(dds)
 pcaData <- plotPCA(rld, intgroup = "condition", returnData = TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
 
-PCAplot <- ggplot(pcaData, aes(PC1, PC2, color = condition)) +
+ggplot(pcaData, aes(PC1, PC2, color = condition)) +
   geom_point(size=3) +
   xlab(paste0("PC1: ",percentVar[1],"% variance")) +
   ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
@@ -105,7 +106,7 @@ MAplot <- plotMA(normRes, ylim= c(-2,2))
 
 A volcano plot is typically used to quickly visualize the relationship between the p-value (or statisitcal significance) and log2 fold change in expression at the gene level. Using abritrary parameters ie. fold-change and p-value cut offs, we can visualize the proportion of genes that are signifcant genes and are up or down regulated.
 
-In the figure below, we can see that following treatment with 5-azacytidine, there was not much significantly DEGs and a large majority of the DEGs seem to be downregulated. The parameters used were: **adjusted p-value <= 0.05 and absolute fold-change >=1.5**.
+In the figure below, we can see that following treatment with 5-azacytidine, there was not much significant DEGs and a large majority of the DEGs seem to be downregulated. The parameters used were: **adjusted p-value <= 0.05 and absolute fold-change >=1.5**.1
 
 
 ```{r geneinfo-volplot, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = "Fig.2: Volcano Plot of Differentially Expressed Genes in Treated vs Untreated Samples"}
@@ -156,7 +157,12 @@ pheatmap(DEgenes, scale = "row", show_rownames = FALSE, clustering_distance_rows
 
 ## Top 20 Over- and Under-expressed DEGs
 
-We then looked at the top 20 over and under expressed DEGs, visuazlied through a heatmap. 
+We then looked at the top 20 over and under expressed genes, visuazlied through a heatmap. 
+
+The under expressed genes broadly contribute to tumour progression such as members of the **MAGE** protein family and **MMP13*. 
+
+Notable genes that were over expressed include **CRLF2** which is involved in the development of the haemopoietic system. **RTN4RL1** is involved in cell signalling in the nervous system. **CPLX1** is involved in the final stages of exocytosis including synaptic vesicles. 
+
 ```{r Top20, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = c("Fig.4: Top 20 Over Expressed Genes", "Fig.5: Top 20 Under Expressed Genes")}
 # Extract Top 20 Over and Under-expressed Genes
 # Up
@@ -189,7 +195,7 @@ pheatmap(top20_down_hm, scale = "row", clustering_distance_rows = "correlation",
 # Pathway Analysis
 ## GSEA
 
-GSEA is used to have a more holistic view, looking at changes at entire pathways instead of a single gene. 
+Since small changes in a single gene expression can have cascading effects, it would be relevant to look at changes in entire pathways to provide a more holistic view. This is done through GSEA analysis.
 ```{r GSEA, include = FALSE}
 # Create gene set for ref
 gene_sets <- msigdbr(species = "Homo sapiens", category = "C5")
@@ -264,7 +270,9 @@ bottom_pathway_plot <- ggarrange(plotlist = bottom_pathway_plots,
 ggsave(bottom_pathway_plot, filename = "top_GSEA_down.png",
        height = 11, width = 18)
 ```
-The top 5 pathways overexpressed 
+
+The top over expressed pathways broadly belong to cell cycle and cell replication processes. Meanwhile, the top underexpressed pathways were notably linked to the immune response such as response to interferon gamma and response to viral infections, and phagocytotic processes.
+
 ```{r gsea-figs, fig.align= "center", fig.cap = c("Fig.6: Top 5 Over Expressed Pathways", "Fig.7: Top 5 Under Expressed Pathways")}
 include_graphics("top_GSEA_up.png")
 include_graphics("top_GSEA_down.png")
