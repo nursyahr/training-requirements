@@ -13,7 +13,7 @@ library(pheatmap)
 ###############################
 ### Download and Load Data ###
 ###############################
-exp <- 'SRP038101'
+exp <-  'SRP038101' #'SRP043043'
 
 url <- download_study(exp)
 
@@ -196,7 +196,8 @@ ranks <- gsea_df %>%
 # Run GSEA
 gseares <- GSEA(geneList = ranks, 
                 TERM2GENE = gene_sets,
-                pvalueCutoff = 1)
+                pvalueCutoff = 0.25)
+                
 
 gsearesdf <- as.data.frame(gseares)
 

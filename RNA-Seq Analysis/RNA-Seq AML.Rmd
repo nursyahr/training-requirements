@@ -33,11 +33,16 @@ Acute Myeloid Leukemia is characterized by an increase in the number of myeloid 
 
 Azacitidine is a DNA methyltransferase inhibitor (DNMTi) which has been used to treat AML patients. However, the inhibition is not permanent and DNA hypermethylation often resumes after treatment. Elucidating which genes are regulated by DNA methylation can inform further treatment strategies and provide a mechanistic understanding of the DNA demethylation in AML.
 
-## Study Design and Workflow Analysis
+## Experimental Study Design 
 
 In this study, OCI-AML3 cells were treated with 5-azacytidine, with a paired control. The experiment was done in triplicates and then total RNA was sequenced.
 
-The dataset was obtained from recount3 and differential gene expression analysis was done through the R package, DEseq2. Following which, gene set enrichment analysis (GSEA) was performed with the clusterProfiler package in R.
+# Analysis Workflow
+## Identification of Differentially Expressed Genes (DEGs)
+The dataset was obtained from recount3 and DEGs were identified through the R package, DEseq2. The cutoffs used were log2 |fold change| >= 1 and *P*-value <0.05.
+
+
+Following which, gene set enrichment analysis (GSEA) was performed with the clusterProfiler package in R. Top pathways were identified by the normalized enrichment score (NES).
 
 ```{r download-load, include= FALSE}
 exp <- 'SRP038101'
@@ -91,7 +96,7 @@ keep <- rowSums(counts(dds)) >= 10
 dds <- dds[keep,]
 
 # Obtain results, contrast to indicate which is ref.
-res <- results(dds, contrast = c("condition", "Treated", "Untreated"))
+res <- results(dds, contrast = c("condition", "Treated", "Untreated"), alpha = 0.05)
 
 # LFC shrink
 normRes <- lfcShrink(dds, res = res, coef= "condition_Treated_vs_Untreated" , type= "apeglm")
@@ -106,7 +111,7 @@ MAplot <- plotMA(normRes, ylim= c(-2,2))
 
 A volcano plot is typically used to quickly visualize the relationship between the p-value (or statisitcal significance) and log2 fold change in expression at the gene level. Using abritrary parameters ie. fold-change and p-value cut offs, we can visualize the proportion of genes that are signifcant genes and are up or down regulated.
 
-In the figure below, we can see that following treatment with 5-azacytidine, there was not much significant DEGs and a large majority of the DEGs seem to be downregulated. The parameters used were: **adjusted p-value <= 0.05 and absolute fold-change >=1.5**.1
+In the figure below, we can see that following treatment with 5-azacytidine, there was not much significant DEGs and a large majority of the DEGs seem to be downregulated. There 495 DEGs identified with 24 upregulated and 471 downregulated genes.
 
 
 ```{r geneinfo-volplot, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = "Fig.2: Volcano Plot of Differentially Expressed Genes in Treated vs Untreated Samples"}
@@ -142,7 +147,7 @@ EnhancedVolcano( finRes, lab = finRes$SYMBOL,
 Through a heatmap we can visualize the differences in gene expression between samples of different treatment conditions and observe for conistency within the treatment group. In the figure below, a significant number of genes are downregulated upon the 5-azacytidine treatment when compared to the control.
 
 ```{r DEG, echo = FALSE, results = 'last', message = FALSE, warning = FALSE, fig.align= 'center', fig.cap = "Fig.3: Heatmap of differentially expressed genes"}
-sigRes <- finRes[which(finRes$padj < 0.1 & abs(finRes$log2FoldChange) >= 1.5 & finRes$baseMean >= 20), ]
+sigRes <- finRes[which(finRes$padj < 0.05 & abs(finRes$log2FoldChange) > 1.5 & finRes$baseMean >= 20), ]
 
 # Plot heatmap of all DE genes
 mat <- assay(rld)   # Use the rlog normalized counts
@@ -271,10 +276,23 @@ ggsave(bottom_pathway_plot, filename = "top_GSEA_down.png",
        height = 11, width = 18)
 ```
 
-The top over expressed pathways broadly belong to cell cycle and cell replication processes. Meanwhile, the top underexpressed pathways were notably linked to the immune response such as response to interferon gamma and response to viral infections, and phagocytotic processes.
 
 ```{r gsea-figs, fig.align= "center", fig.cap = c("Fig.6: Top 5 Over Expressed Pathways", "Fig.7: Top 5 Under Expressed Pathways")}
 include_graphics("top_GSEA_up.png")
 include_graphics("top_GSEA_down.png")
 
 ```
+
+
+# Discussion
+Unexpectedly, the individual significant genes identified through the heatmap were not significantly
+
+The top over expressed pathways broadly belong to cell cycle and cell replication processes. Meanwhile, the top underexpressed pathways were notably linked to the immune response such as response to interferon gamma and response to viral infections, and phagocytotic processes. 
+
+Moving forward, the RNA-seq analysis should be complemented by differential DNA methylation analysis to establish a correlation 
+
+
+
+
+
+
