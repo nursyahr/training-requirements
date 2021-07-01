@@ -13,7 +13,7 @@ library(pheatmap)
 ###############################
 ### Download and Load Data ###
 ###############################
-exp <-  'SRP038101' #'SRP043043'
+exp <-  'SRP043043'
 
 url <- download_study(exp)
 
@@ -27,29 +27,28 @@ cts <- assay(rse_gene)
 cd <- as.data.frame(colData(rse_gene))
 
 # Add condition status, modify 'title' to indicate Replicates
-rse_gene$cell = gsub('^[[:alpha:]]*\\.', 'Replicate ', rse_gene$title)
-rse_gene$condition <- factor(ifelse(grepl("Untreated", colData(rse_gene)$title), "Untreated", "Treated"))
-
-# change ensembl id to remove vers
+rse_gene$cell = gsub('^[[:alpha:]]*[0-9]*\\_', '', rse_gene$title)
+# rse_gene$condition <- factor(ifelse(grepl("siScram", colData(rse_gene)$title), "Untreated", "Treated"))
+# 
+# # change ensembl id to remove vers
 rownames(rse_gene) <- gsub('\\.[0-9]*$', '', rownames(rse_gene))
-
-
+rse_gene$condition <- c(rep("siSCR", 3), rep("siZNF217", 3))
 
 #####################################
 ### Principal Component Analysis ###
 ####################################
 # Create DEseq dataset: design formula variable of interest is treatment status
 dds <- DESeqDataSet(rse_gene, ~condition)
-dds$condition <- relevel(dds$condition, ref = "Untreated")
+dds$condition <- relevel(dds$condition, ref = "siSCR")
 
 # Create PCA to inspect batch effect
 # Perform regularized logarithm transformation (rlog) on the data; VST (>30 samples)
-rld <- rlog(dds)
+vsd<- vst(dds)
 
 # Create PCA plot
-pcaData <- plotPCA(rld, intgroup = "condition", returnData = TRUE)
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
 percentVar <- round(100 * attr(pcaData, "percentVar"))
-PCAplot <- ggplot(pcaData, aes(PC1, PC2, color = condition)) +
+ggplot(pcaData, aes(PC1, PC2, color = condition)) +
   geom_point(size=3) +
   xlab(paste0("PC1: ",percentVar[1],"% variance")) +
   ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
@@ -62,43 +61,42 @@ PCAplot <- ggplot(pcaData, aes(PC1, PC2, color = condition)) +
 dds <- DESeq(dds)
 
 # Pre-filter low counts
-keep <- rowSums(counts(dds)) >= 10
-dds <- dds[keep,]
+#keep <- rowSums(counts(dds)) >= 10
+#dds <- dds[keep,]
 
 # Obtain results, contrast to indicate which is ref.
-res <- results(dds, contrast = c("condition", "Treated", "Untreated"))
-MAplot <- plotMA(res, ylim= c(-2,2))
+res <- results(dds, contrast = c("condition", "siZNF217", "siSCR"))
+
 
 # LFC shrink
-normRes <- lfcShrink(dds, res = res, coef= "condition_Treated_vs_Untreated" , type= "apeglm")
+normRes <- lfcShrink(dds, res = res, coef= "condition_siZNF217_vs_siSCR", type= "apeglm")
 
 # MA Plot
-MAplot <- plotMA(normRes, ylim= c(-2,2))
+plotMA(normRes)
 
 
 ############################
 ### Volcano Plot of DEG ###
 ###########################
 # Make a df out of the res
-res_tb <- normRes %>%
+resdf <- normRes %>%
   data.frame() %>%
-  rownames_to_column(var="ensembl_id") %>% 
-  as_tibble() 
+  rownames_to_column(var="ensembl_id") 
 
 # Creating a tibble of ENSEMBL (GENEID), ENTREZID, SYMBOL, GENENAME using EnsDb.Hsapiens.v86 db
-anno <- as_tibble(AnnotationDbi::select(EnsDb.Hsapiens.v86,res_tb$ensembl_id, 
-                                        columns=c("GENEID", "ENTREZID", "SYMBOL"), 
-                                        keytype="GENEID"))
+anno <- AnnotationDbi::select(EnsDb.Hsapiens.v86,resdf$ensembl_id, 
+                                        columns=c("GENEID", "SYMBOL"), 
+                                        keytype="GENEID")
 
 # left_join the res and the gene information
-finRes <- res_tb %>%
+finRes <- resdf %>%
   left_join(anno, by = c("ensembl_id" ="GENEID"))
 
 # Plot Volcano
 EnhancedVolcano( finRes, lab = finRes$SYMBOL, 
                  x = 'log2FoldChange', y = 'padj',
                  xlim = c(-8, 8), title = 'Treated vs Untreated',
-                 pCutoff = 0.05, FCcutoff = 1.5, 
+                 pCutoff = 1e-100, FCcutoff = 1.25, 
                  pointSize = 2.0, 
                  labSize = 3.0,
                  border = "full", borderWidth = 1.5, borderColour = "black", 
@@ -112,11 +110,11 @@ EnhancedVolcano( finRes, lab = finRes$SYMBOL,
 sigRes <- finRes[which(finRes$padj < 0.05 & abs(finRes$log2FoldChange) >= 1.5 & finRes$baseMean >= 20), ]
 
 # Heatmap of all DEGs
-mat <- assay(rld)   # Use the rlog normalized counts
+mat <- assay(vsd)  
 idx <- sigRes$ensembl_id 
 DEgenes <- mat[idx,]
 
-annotation <- as.data.frame(colData(rld)[, c("cell", "condition")])
+annotation <- as.data.frame(colData(vsd)[, c("cell", "condition")])
 
 pheatmap(DEgenes, scale = "row", show_rownames = FALSE, clustering_distance_rows = "correlation", annotation_col = annotation, main="Differentially Expressed Genes")
 
@@ -131,7 +129,7 @@ top20_up <- sigRes %>%
 top20_down <- sigRes %>%
   dplyr::filter(log2FoldChange < 1.5 & padj < 0.05) %>%
   arrange(log2FoldChange) %>%
-  head(20)
+ head(20)
 
 # Plot Heatmaps
 # Up HM
@@ -151,8 +149,13 @@ pheatmap(top20_down_hm, scale = "row", clustering_distance_rows = "correlation",
 ###############
 
 # Extract over expressed genes 
-over_expressed <- top20_up %>%
+over_expressed_genes <- finRes %>%
+  dplyr::filter(padj < .05 & log2FoldChange > 1.5) %>%
   pull(SYMBOL)
+
+OEgenes <- finRes %>%
+  dplyr::filter(padj < .05 & log2FoldChange > 1.5) %>%
+  write_csv("OEgenes.csv")
 
 # Create gene set for ref
 gene_sets <- msigdbr(species = "Homo sapiens", category = "C5")
@@ -160,7 +163,7 @@ gene_sets <- gene_sets %>%
   dplyr::select(gs_name, gene_symbol)
 
 # Use enrichr to look at OE genes (compared to GO)
-egmt <- enricher(gene = over_expressed,
+egmt <- enricher(gene = over_expressed_genes,
                  TERM2GENE = gene_sets)
 edf <- as.data.frame(egmt)
 
@@ -181,14 +184,14 @@ gsea_df <- gsea_df %>%
 
 # Remove NAs and order by GSEA
 gsea_df <- gsea_df  %>%
-  dplyr::filter(! is.na(gsea_metric)) %>%
+  dplyr::filter(!is.na(gsea_metric)) %>%
   arrange(desc(gsea_metric)) # needed to run GSEA later
 
 # GSEA value histogram
-# hist(gsea_df$gsea_metric, breaks = 100)
+hist(gsea_df$gsea_metric, breaks = 100)
 
 # Get the ranked GSEA vector
-ranks <- gsea_df %>%
+ranks <- gsea_df  %>%
   dplyr::select(SYMBOL, gsea_metric) %>%
   distinct(SYMBOL, .keep_all = TRUE) %>%
   deframe()
@@ -196,10 +199,11 @@ ranks <- gsea_df %>%
 # Run GSEA
 gseares <- GSEA(geneList = ranks, 
                 TERM2GENE = gene_sets,
-                pvalueCutoff = 0.25)
-                
+                pvalueCutoff = 1)
 
 gsearesdf <- as.data.frame(gseares)
+
+View(gsearesdf)
 
 # Plot GSEA results
 # Top 5 Over
