@@ -19,19 +19,31 @@ knitr::opts_chunk$set(
   message = FALSE,
   fig.align = 'center')
 
-# Load libraries
-library(knitr)
-library(recount)
-library(DESeq2)
-library(tidyverse)
-library(ggpubr)
-library(EnhancedVolcano)
-library(EnsDb.Hsapiens.v86)
-library(msigdbr)
-library(clusterProfiler)
-library(ggplot2)
-library(pheatmap)
-library(DT)
+# List of packages
+
+listOfBiocPackages = c("DESeq2", "recount", "EnhancedVolcano","EnsDb.Hsapiens.v86", "msigdbr", "clusterProfiler" )
+notInstalled <- which( !listOfBiocPackages %in% rownames(installed.packages()) )
+
+## check there's still something left to install
+if( length(notInstalled) ) {
+    biocLite(listOfBiocPackages[ notInstalled ])
+}
+
+# Normal install
+packages = c("knitr", "tidyverse", "ggpubr", "ggplot2", "pheatmap", "DT")
+
+## Now load or install & load all
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = TRUE)) {
+      install.packages(x, dependencies = TRUE)
+      library(x, character.only = TRUE)
+    }
+  }
+)
+
+#####
 
 exp <-  'SRP043043'
 
