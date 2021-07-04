@@ -197,11 +197,18 @@ ranks <- gsea_df  %>%
   deframe()
 
 # Run GSEA
+set.seed(1234)
 gseares <- GSEA(geneList = ranks, 
                 TERM2GENE = gene_sets,
-                pvalueCutoff = 1)
+                seed = TRUE, 
+                nPerm = 10000,
+                pvalueCutoff = 0.25)
 
-gsearesdf <- as.data.frame(gseares)
+
+gsearesdf <- as.data.frame(gseares) # run 1: nPerm = 10000, pvalue = 0.25, seed = TRUE
+gsearesdf1 <- as.data.frame(gseares) # run 2
+gsearesdf2 <- as.data.frame(gseares)
+
 
 View(gsearesdf)
 
@@ -220,7 +227,6 @@ top_pathway_plots <- lapply(top_pathways, function(pathway) {
 # Arrange with labels as a multi-panel plot
 top_pathway_plot <- ggarrange(plotlist = top_pathway_plots,
                               ncol = 2, nrow = 3, labels = "AUTO")
-
 
 #  Save it
 ggsave(top_pathway_plot, filename = "top_GSEA_up.png",
